@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"github.com/hanasakis/kotoha/internal/agent"
 	"github.com/hanasakis/kotoha/internal/auth"
 	"github.com/hanasakis/kotoha/internal/cart"
 	"github.com/hanasakis/kotoha/internal/catalog"
@@ -18,6 +19,7 @@ import (
 	"github.com/hanasakis/kotoha/internal/user"
 	"github.com/hanasakis/kotoha/pkg/embedding"
 	"github.com/hanasakis/kotoha/pkg/milvus"
+	ollamapkg "github.com/hanasakis/kotoha/pkg/ollama"
 	goredis "github.com/hanasakis/kotoha/pkg/redis"
 	stripepkg "github.com/hanasakis/kotoha/pkg/stripe"
 )
@@ -69,6 +71,11 @@ func Setup(deps *Dependencies) *gin.Engine {
 	embeddingCli := embedding.New(deps.Config.Ollama.Host, deps.Config.Embedding.Model)
 	searchSvc := search.NewService(milvusCli, embeddingCli, catalogRepo, deps.Config.Milvus.DenseWeight, deps.Config.Milvus.RecallTopK)
 	searchH := search.NewHandler(searchSvc)
+
+	ollamaCli := ollamapkg.New(deps.Config.Ollama.Host)
+	agentExecutor := agent.NewToolExecutor(catalogRepo, searchSvc, cartSvc)
+	agentSvc := agent.NewService(ollamaCli, agentExecutor, deps.Config.LLM.Model, deps.Config.LLM.Temperature, deps.Config.LLM.MaxTokens)
+	agentH := agent.NewHandler(agentSvc)
 
 	// --- Routes ---
 	r.GET("/health", func(c *gin.Context) {
@@ -132,6 +139,9 @@ func Setup(deps *Dependencies) *gin.Engine {
 
 			// Payment
 			protected.POST("/orders/:id/checkout", paymentH.CreateCheckout)
+
+			// Agent
+			protected.POST("/agent/chat", agentH.Chat)
 
 			// Admin routes
 			admin := protected.Group("/admin")
