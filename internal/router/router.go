@@ -14,7 +14,10 @@ import (
 	"github.com/hanasakis/kotoha/internal/middleware"
 	"github.com/hanasakis/kotoha/internal/order"
 	"github.com/hanasakis/kotoha/internal/payment"
+	"github.com/hanasakis/kotoha/internal/search"
 	"github.com/hanasakis/kotoha/internal/user"
+	"github.com/hanasakis/kotoha/pkg/embedding"
+	"github.com/hanasakis/kotoha/pkg/milvus"
 	goredis "github.com/hanasakis/kotoha/pkg/redis"
 	stripepkg "github.com/hanasakis/kotoha/pkg/stripe"
 )
@@ -62,6 +65,11 @@ func Setup(deps *Dependencies) *gin.Engine {
 	paymentSvc := payment.NewService(orderRepo, stripeCli)
 	paymentH := payment.NewHandler(paymentSvc)
 
+	milvusCli := milvus.New(deps.Config.MilvusAddr(), deps.Config.Milvus.DB)
+	embeddingCli := embedding.New(deps.Config.Ollama.Host, deps.Config.Embedding.Model)
+	searchSvc := search.NewService(milvusCli, embeddingCli, catalogRepo, deps.Config.Milvus.DenseWeight, deps.Config.Milvus.RecallTopK)
+	searchH := search.NewHandler(searchSvc)
+
 	// --- Routes ---
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
@@ -83,6 +91,7 @@ func Setup(deps *Dependencies) *gin.Engine {
 			catalogGroup.GET("/categories", catalogH.ListCategories)
 			catalogGroup.GET("/products", catalogH.ListProducts)
 			catalogGroup.GET("/products/:id", catalogH.GetProduct)
+			catalogGroup.GET("/search", searchH.Search)
 		}
 
 		// Stripe webhook (public)
@@ -124,13 +133,14 @@ func Setup(deps *Dependencies) *gin.Engine {
 			// Payment
 			protected.POST("/orders/:id/checkout", paymentH.CreateCheckout)
 
-			// Admin catalog routes
-			admin := protected.Group("/admin/products")
+			// Admin routes
+			admin := protected.Group("/admin")
 			admin.Use(middleware.RoleRequired("admin"))
 			{
-				admin.POST("", catalogH.CreateProduct)
-				admin.PUT("/:id", catalogH.UpdateProduct)
-				admin.DELETE("/:id", catalogH.DeleteProduct)
+				admin.POST("/products", catalogH.CreateProduct)
+				admin.PUT("/products/:id", catalogH.UpdateProduct)
+				admin.DELETE("/products/:id", catalogH.DeleteProduct)
+				admin.POST("/search/index", searchH.IndexAll)
 			}
 		}
 	}
