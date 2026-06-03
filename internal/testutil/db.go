@@ -30,7 +30,7 @@ func SetupTestRedis(t *testing.T) *goredis.Client {
 
 	cfg, err := config.Load()
 	if err != nil {
-		t.Skipf("skipping integration test: cannot load config: %v", err)
+		t.Skipf("skipping integration test: cannot connect to config: %v", err)
 	}
 
 	rdb, err := goredis.New(cfg.RedisAddr(), cfg.Redis.Password, cfg.Redis.DB)
@@ -43,9 +43,5 @@ func SetupTestRedis(t *testing.T) *goredis.Client {
 
 func CleanTestDB(t *testing.T, db *gorm.DB) {
 	t.Helper()
-	tables := []string{"order_items", "payments", "orders", "skus", "products",
-		"categories", "sessions", "addresses", "preferences", "profiles", "users"}
-	for _, t := range tables {
-		db.Exec("DELETE FROM " + t)
-	}
+	db.Exec("TRUNCATE TABLE order_items, payments, orders, skus, products, categories, sessions, addresses, preferences, profiles, users CASCADE")
 }

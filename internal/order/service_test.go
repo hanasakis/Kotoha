@@ -48,7 +48,7 @@ func TestCreateOrder(t *testing.T) {
 		created, err := orderSvc.CreateOrder(ctx, 1, order.CreateOrderInput{AddressID: 1})
 		require.NoError(t, err)
 		assert.NotEmpty(t, created.OrderNo)
-		assert.Len(t, created.OrderNo, 22) // KO + userID(1) + timestamp(14) + 4 random
+		assert.Len(t, created.OrderNo, 21) // KO + userID(1) + timestamp(14) + 4 random
 		assert.Equal(t, order.StatusPending, created.Status)
 		assert.Equal(t, "cny", created.Currency)
 		assert.Len(t, created.Items, 1)

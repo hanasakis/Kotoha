@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -72,7 +74,12 @@ type CORSConfig struct {
 }
 
 func Load() (*Config, error) {
-	viper.SetConfigFile(".env")
+	envPath := findEnvFile()
+	if envPath != "" {
+		viper.SetConfigFile(envPath)
+	} else {
+		viper.SetConfigFile(".env")
+	}
 	viper.AutomaticEnv()
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	_ = viper.ReadInConfig()
@@ -145,6 +152,22 @@ func (c *Config) DSN() string {
 
 func (c *Config) RedisAddr() string  { return c.Redis.Host + ":" + c.Redis.Port }
 func (c *Config) MilvusAddr() string { return c.Milvus.Host + ":" + c.Milvus.Port }
+
+func findEnvFile() string {
+	cwd, _ := os.Getwd()
+	for range 10 {
+		path := filepath.Join(cwd, ".env")
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+		parent := filepath.Dir(cwd)
+		if parent == cwd {
+			break
+		}
+		cwd = parent
+	}
+	return ""
+}
 
 func getEnv(key, def string) string {
 	if v := viper.GetString(key); v != "" {
