@@ -7,6 +7,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/hanasakis/kotoha/internal/auth"
+	"github.com/hanasakis/kotoha/internal/catalog"
 	"github.com/hanasakis/kotoha/internal/config"
 	"github.com/hanasakis/kotoha/internal/i18n"
 	"github.com/hanasakis/kotoha/internal/middleware"
@@ -41,6 +42,10 @@ func Setup(deps *Dependencies) *gin.Engine {
 	userSvc := user.NewService(deps.DB)
 	userH := user.NewHandler(userSvc)
 
+	catalogRepo := catalog.NewRepository(deps.DB)
+	catalogSvc := catalog.NewService(catalogRepo)
+	catalogH := catalog.NewHandler(catalogSvc)
+
 	// --- Routes ---
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
@@ -54,6 +59,14 @@ func Setup(deps *Dependencies) *gin.Engine {
 			authGroup.POST("/register", authH.Register)
 			authGroup.POST("/login", authH.Login)
 			authGroup.POST("/refresh", authH.Refresh)
+		}
+
+		// Public catalog routes
+		catalogGroup := v1.Group("/catalog")
+		{
+			catalogGroup.GET("/categories", catalogH.ListCategories)
+			catalogGroup.GET("/products", catalogH.ListProducts)
+			catalogGroup.GET("/products/:id", catalogH.GetProduct)
 		}
 
 		// Protected routes
@@ -76,6 +89,15 @@ func Setup(deps *Dependencies) *gin.Engine {
 			// Preferences
 			protected.GET("/preferences", userH.GetPreference)
 			protected.PUT("/preferences", userH.UpdatePreference)
+
+			// Admin catalog routes
+			admin := protected.Group("/admin/products")
+			admin.Use(middleware.RoleRequired("admin"))
+			{
+				admin.POST("", catalogH.CreateProduct)
+				admin.PUT("/:id", catalogH.UpdateProduct)
+				admin.DELETE("/:id", catalogH.DeleteProduct)
+			}
 		}
 	}
 
