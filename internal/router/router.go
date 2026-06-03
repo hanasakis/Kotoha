@@ -12,6 +12,7 @@ import (
 	"github.com/hanasakis/kotoha/internal/config"
 	"github.com/hanasakis/kotoha/internal/i18n"
 	"github.com/hanasakis/kotoha/internal/middleware"
+	"github.com/hanasakis/kotoha/internal/order"
 	"github.com/hanasakis/kotoha/internal/user"
 	goredis "github.com/hanasakis/kotoha/pkg/redis"
 )
@@ -50,6 +51,10 @@ func Setup(deps *Dependencies) *gin.Engine {
 	cartRepo := cart.NewRepository(deps.Redis)
 	cartSvc := cart.NewService(cartRepo, catalogRepo)
 	cartH := cart.NewHandler(cartSvc)
+
+	orderRepo := order.NewRepository(deps.DB)
+	orderSvc := order.NewService(orderRepo, cartRepo, catalogRepo)
+	orderH := order.NewHandler(orderSvc)
 
 	// --- Routes ---
 	r.GET("/health", func(c *gin.Context) {
@@ -100,6 +105,12 @@ func Setup(deps *Dependencies) *gin.Engine {
 			protected.POST("/cart/items", cartH.AddItem)
 			protected.PUT("/cart/items/:skuID", cartH.UpdateQty)
 			protected.DELETE("/cart/items/:skuID", cartH.RemoveItem)
+
+			// Orders
+			protected.POST("/orders", orderH.CreateOrder)
+			protected.GET("/orders", orderH.ListOrders)
+			protected.GET("/orders/:id", orderH.GetOrder)
+			protected.POST("/orders/:id/cancel", orderH.CancelOrder)
 
 			// Admin catalog routes
 			admin := protected.Group("/admin/products")
