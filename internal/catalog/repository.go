@@ -93,6 +93,12 @@ func (r *Repository) GetSKU(id uint) (*SKU, error) {
 	return &sku, nil
 }
 
+func (r *Repository) GetSKUsByIDs(ids []uint) ([]SKU, error) {
+	var skus []SKU
+	err := r.DB.Where("id IN ?", ids).Find(&skus).Error
+	return skus, err
+}
+
 func (r *Repository) UpdateSKUStock(id uint, delta int) error {
 	return r.DB.Model(&SKU{}).Where("id = ?", id).
 		UpdateColumn("stock", gorm.Expr("stock + ?", delta)).Error

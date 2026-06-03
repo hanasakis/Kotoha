@@ -7,6 +7,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/hanasakis/kotoha/internal/auth"
+	"github.com/hanasakis/kotoha/internal/cart"
 	"github.com/hanasakis/kotoha/internal/catalog"
 	"github.com/hanasakis/kotoha/internal/config"
 	"github.com/hanasakis/kotoha/internal/i18n"
@@ -45,6 +46,10 @@ func Setup(deps *Dependencies) *gin.Engine {
 	catalogRepo := catalog.NewRepository(deps.DB)
 	catalogSvc := catalog.NewService(catalogRepo)
 	catalogH := catalog.NewHandler(catalogSvc)
+
+	cartRepo := cart.NewRepository(deps.Redis)
+	cartSvc := cart.NewService(cartRepo, catalogRepo)
+	cartH := cart.NewHandler(cartSvc)
 
 	// --- Routes ---
 	r.GET("/health", func(c *gin.Context) {
@@ -89,6 +94,12 @@ func Setup(deps *Dependencies) *gin.Engine {
 			// Preferences
 			protected.GET("/preferences", userH.GetPreference)
 			protected.PUT("/preferences", userH.UpdatePreference)
+
+			// Cart
+			protected.GET("/cart", cartH.GetCart)
+			protected.POST("/cart/items", cartH.AddItem)
+			protected.PUT("/cart/items/:skuID", cartH.UpdateQty)
+			protected.DELETE("/cart/items/:skuID", cartH.RemoveItem)
 
 			// Admin catalog routes
 			admin := protected.Group("/admin/products")
