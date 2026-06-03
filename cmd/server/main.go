@@ -5,6 +5,7 @@ import (
 
 	"github.com/hanasakis/kotoha/internal/config"
 	"github.com/hanasakis/kotoha/pkg/db"
+	goredis "github.com/hanasakis/kotoha/pkg/redis"
 )
 
 func main() {
@@ -21,6 +22,12 @@ func main() {
 	if err := db.AutoMigrate(database); err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
+
+	redisClient, err := goredis.New(cfg.RedisAddr(), cfg.Redis.Password, cfg.Redis.DB)
+	if err != nil {
+		log.Fatalf("Failed to connect to Redis: %v", err)
+	}
+	defer redisClient.Close()
 
 	log.Printf("Kotoha server starting on %s:%s", cfg.Server.Host, cfg.Server.Port)
 }
