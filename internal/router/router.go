@@ -13,8 +13,10 @@ import (
 	"github.com/hanasakis/kotoha/internal/i18n"
 	"github.com/hanasakis/kotoha/internal/middleware"
 	"github.com/hanasakis/kotoha/internal/order"
+	"github.com/hanasakis/kotoha/internal/payment"
 	"github.com/hanasakis/kotoha/internal/user"
 	goredis "github.com/hanasakis/kotoha/pkg/redis"
+	stripepkg "github.com/hanasakis/kotoha/pkg/stripe"
 )
 
 type Dependencies struct {
@@ -56,6 +58,10 @@ func Setup(deps *Dependencies) *gin.Engine {
 	orderSvc := order.NewService(orderRepo, cartRepo, catalogRepo)
 	orderH := order.NewHandler(orderSvc)
 
+	stripeCli := stripepkg.New(deps.Config.Stripe.SecretKey, deps.Config.Stripe.WebhookSecret)
+	paymentSvc := payment.NewService(orderRepo, stripeCli)
+	paymentH := payment.NewHandler(paymentSvc)
+
 	// --- Routes ---
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
@@ -78,6 +84,9 @@ func Setup(deps *Dependencies) *gin.Engine {
 			catalogGroup.GET("/products", catalogH.ListProducts)
 			catalogGroup.GET("/products/:id", catalogH.GetProduct)
 		}
+
+		// Stripe webhook (public)
+		v1.POST("/webhook", paymentH.HandleWebhook)
 
 		// Protected routes
 		protected := v1.Group("")
@@ -111,6 +120,9 @@ func Setup(deps *Dependencies) *gin.Engine {
 			protected.GET("/orders", orderH.ListOrders)
 			protected.GET("/orders/:id", orderH.GetOrder)
 			protected.POST("/orders/:id/cancel", orderH.CancelOrder)
+
+			// Payment
+			protected.POST("/orders/:id/checkout", paymentH.CreateCheckout)
 
 			// Admin catalog routes
 			admin := protected.Group("/admin/products")

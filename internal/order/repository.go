@@ -45,8 +45,18 @@ func (r *Repository) UpdateStripeSession(id uint, stripeSID string) error {
 	return r.DB.Model(&Order{}).Where("id = ?", id).Update("stripe_session_id", stripeSID).Error
 }
 
+func (r *Repository) FindByOrderNo(orderNo string) (*Order, error) {
+	var o Order
+	err := r.DB.Preload("Items").Where("order_no = ?", orderNo).First(&o).Error
+	if err != nil {
+		return nil, err
+	}
+	return &o, nil
+}
+
 func (r *Repository) SetPaid(id uint) error {
-	return r.DB.Model(&Order{}).Where("id = ?", id).Update("status", StatusPaid).Update("paid_at", gorm.Expr("NOW()")).Error
+	return r.DB.Model(&Order{}).Where("id = ?", id).
+		Updates(map[string]interface{}{"status": StatusPaid, "paid_at": gorm.Expr("NOW()")}).Error
 }
 
 func (r *Repository) CreatePayment(p *Payment) error {
