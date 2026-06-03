@@ -13,11 +13,13 @@ import (
 	"github.com/hanasakis/kotoha/internal/config"
 	"github.com/hanasakis/kotoha/internal/i18n"
 	"github.com/hanasakis/kotoha/internal/middleware"
+	"github.com/hanasakis/kotoha/internal/observability"
 	"github.com/hanasakis/kotoha/internal/order"
 	"github.com/hanasakis/kotoha/internal/payment"
 	"github.com/hanasakis/kotoha/internal/search"
 	"github.com/hanasakis/kotoha/internal/user"
 	"github.com/hanasakis/kotoha/pkg/embedding"
+	"github.com/hanasakis/kotoha/pkg/langfuse"
 	"github.com/hanasakis/kotoha/pkg/milvus"
 	ollamapkg "github.com/hanasakis/kotoha/pkg/ollama"
 	goredis "github.com/hanasakis/kotoha/pkg/redis"
@@ -75,7 +77,10 @@ func Setup(deps *Dependencies) *gin.Engine {
 	ollamaCli := ollamapkg.New(deps.Config.Ollama.Host)
 	agentExecutor := agent.NewToolExecutor(catalogRepo, searchSvc, cartSvc)
 	agentSvc := agent.NewService(ollamaCli, agentExecutor, deps.Config.LLM.Model, deps.Config.LLM.Temperature, deps.Config.LLM.MaxTokens)
-	agentH := agent.NewHandler(agentSvc)
+
+	langfuseCli := langfuse.New(deps.Config.Langfuse.Host, deps.Config.Langfuse.PublicKey, deps.Config.Langfuse.SecretKey)
+	obsSvc := observability.NewService(agentSvc, langfuseCli, deps.Config.LLM.Model)
+	obsH := observability.NewHandler(obsSvc)
 
 	// --- Routes ---
 	r.GET("/health", func(c *gin.Context) {
@@ -141,7 +146,10 @@ func Setup(deps *Dependencies) *gin.Engine {
 			protected.POST("/orders/:id/checkout", paymentH.CreateCheckout)
 
 			// Agent
-			protected.POST("/agent/chat", agentH.Chat)
+			protected.POST("/agent/chat", obsH.Chat)
+
+			// Observability
+			protected.GET("/metrics", obsH.Metrics)
 
 			// Admin routes
 			admin := protected.Group("/admin")
