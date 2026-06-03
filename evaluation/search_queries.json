@@ -1,0 +1,141 @@
+{
+  "description": "Kotoha 搜索评估查询集 - 用于评估混合搜索的准确率和召回率",
+  "version": "1.0",
+  "queries": [
+    {
+      "id": "q01",
+      "query_zh": "办公室零食",
+      "query_en": "office snacks",
+      "expected_ids": [1, 2, 5, 10, 13, 14, 15, 18, 19],
+      "scene": "office",
+      "min_relevant": 3,
+      "notes": "应返回办公室场景的坚果、果干、糕点类产品"
+    },
+    {
+      "id": "q02",
+      "query_zh": "追剧必备",
+      "query_en": "binge watch snacks",
+      "expected_ids": [3, 7, 8, 11, 16, 17],
+      "scene": "binge-watch",
+      "min_relevant": 3,
+      "notes": "应返回追剧场景的零食，如芥末腰果、牛肉丝、鱿鱼丝等"
+    },
+    {
+      "id": "q03",
+      "query_zh": "辣味零食",
+      "query_en": "spicy snacks",
+      "expected_ids": [3, 7, 8, 16],
+      "taste": "spicy",
+      "min_relevant": 2,
+      "notes": "应返回香辣肉食类产品"
+    },
+    {
+      "id": "q04",
+      "query_zh": "健康低卡",
+      "query_en": "healthy low calorie",
+      "expected_ids": [4, 5, 6, 13, 15, 18],
+      "taste": "sweet,low_sugar",
+      "min_relevant": 3,
+      "notes": "应返回冻干水果、花草茶等低卡产品"
+    },
+    {
+      "id": "q05",
+      "query_zh": "坚果",
+      "query_en": "nuts",
+      "expected_ids": [1, 2, 3, 15],
+      "min_relevant": 3,
+      "notes": "应返回所有坚果类产品"
+    },
+    {
+      "id": "q06",
+      "query_zh": "送礼物",
+      "query_en": "gift packaging",
+      "expected_ids": [2, 10, 11, 15, 17, 18],
+      "scene": "gift",
+      "min_relevant": 2,
+      "notes": "应返回适合送礼的组合装产品"
+    },
+    {
+      "id": "q07",
+      "query_zh": "儿童零食",
+      "query_en": "kids snacks",
+      "expected_ids": [4, 10, 11, 15, 17],
+      "scene": "kids",
+      "min_relevant": 2,
+      "notes": "应返回适合儿童的零食"
+    },
+    {
+      "id": "q08",
+      "query_zh": "茶饮搭配",
+      "query_en": "tea pairing",
+      "expected_ids": [11, 12, 18, 19],
+      "min_relevant": 2,
+      "notes": "应返回茶饮搭配包分类和低卡产品"
+    },
+    {
+      "id": "q09",
+      "query_zh": "肉类海鲜",
+      "query_en": "meat seafood",
+      "expected_ids": [7, 8, 16],
+      "min_relevant": 2,
+      "notes": "应返回肉食海味类产品"
+    },
+    {
+      "id": "q10",
+      "query_zh": "糕点饼干",
+      "query_en": "pastries crackers",
+      "expected_ids": [9, 10, 11, 17],
+      "min_relevant": 2,
+      "notes": "应返回糕点膨化类产品"
+    },
+    {
+      "id": "q11",
+      "query_zh": "高蛋白",
+      "query_en": "high protein",
+      "expected_ids": [7, 8],
+      "min_relevant": 1,
+      "notes": "应返回高蛋白产品如鱿鱼丝、牛肉丝"
+    },
+    {
+      "id": "q12",
+      "query_zh": "宿舍零食",
+      "query_en": "dorm snacks",
+      "expected_ids": [4, 8, 11, 16, 17],
+      "scene": "dorm",
+      "min_relevant": 2,
+      "notes": "应返回适合宿舍场景的零食"
+    },
+    {
+      "id": "q13",
+      "query_zh": "低脂零食",
+      "query_en": "low fat snacks",
+      "expected_ids": [4, 5, 6, 17],
+      "min_relevant": 2,
+      "notes": "应返回低脂类零食"
+    },
+    {
+      "id": "q14",
+      "query_zh": "综合大礼包",
+      "query_en": "combo bundle gift",
+      "expected_ids": [18, 19],
+      "min_relevant": 1,
+      "notes": "应返回组合包产品"
+    },
+    {
+      "id": "q15",
+      "query_zh": "酸甜口味",
+      "query_en": "sweet and sour",
+      "expected_ids": [2, 4, 5, 6, 13, 15, 17],
+      "taste": "sweet",
+      "min_relevant": 3,
+      "notes": "应返回甜味和果味产品"
+    }
+  ],
+  "metrics": {
+    "recall_at_k": [4, 8, 10],
+    "mrr": true,
+    "ndcg": true,
+    "dense_weight": 0.65,
+    "bm25_weight": 0.35
+  }
+}

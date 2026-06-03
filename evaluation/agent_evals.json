@@ -1,0 +1,161 @@
+{
+  "description": "Kotoha AI Agent 评估场景 - 用于评估代理对话质量和工具调用准确性",
+  "version": "1.0",
+  "scenarios": [
+    {
+      "id": "a01",
+      "name": "产品搜索 - 中文",
+      "user_message": "我想找一些办公室吃的小零食，不要太甜的",
+      "expected_tool": "search_products",
+      "expected_tool_args": {"query": "办公室 不太甜"},
+      "evaluation": {
+        "intent_match": "search",
+        "language": "zh",
+        "difficulty": "easy"
+      }
+    },
+    {
+      "id": "a02",
+      "name": "产品搜索 - 英文",
+      "user_message": "I'm looking for spicy snacks to go with beer",
+      "expected_tool": "search_products",
+      "expected_tool_args": {"query": "spicy beer snacks"},
+      "evaluation": {
+        "intent_match": "search",
+        "language": "en",
+        "difficulty": "easy"
+      }
+    },
+    {
+      "id": "a03",
+      "name": "查看购物车",
+      "user_message": "我的购物车里有什么？",
+      "expected_tool": "get_cart",
+      "expected_tool_args": {},
+      "evaluation": {
+        "intent_match": "cart_view",
+        "language": "zh",
+        "difficulty": "easy"
+      }
+    },
+    {
+      "id": "a04",
+      "name": "添加到购物车",
+      "user_message": "帮我把150g装的蜂蜜烤核桃仁加到购物车吧",
+      "expected_tool": "add_to_cart",
+      "evaluation": {
+        "intent_match": "cart_add",
+        "language": "zh",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "a05",
+      "name": "多步场景 - 搜索后加购",
+      "user_message": "有什么低卡的零食推荐吗？帮我找几个健康的",
+      "expected_tool": "search_products",
+      "expected_tool_args": {"query": "低卡 健康"},
+      "evaluation": {
+        "intent_match": "search",
+        "language": "zh",
+        "difficulty": "medium",
+        "follow_up": {
+          "user_message": "把第一个加到购物车",
+          "expected_tool": "add_to_cart"
+        }
+      }
+    },
+    {
+      "id": "a06",
+      "name": "查看分类",
+      "user_message": "你们有哪些零食分类？",
+      "expected_tool": "list_categories",
+      "expected_tool_args": {},
+      "evaluation": {
+        "intent_match": "categories",
+        "language": "zh",
+        "difficulty": "easy"
+      }
+    },
+    {
+      "id": "a07",
+      "name": "闲聊 - 不触发工具",
+      "user_message": "你好，能介绍一下你们是什么店吗？",
+      "expected_no_tool": true,
+      "evaluation": {
+        "intent_match": "chitchat",
+        "language": "zh",
+        "difficulty": "easy"
+      }
+    },
+    {
+      "id": "a08",
+      "name": "过敏原查询",
+      "user_message": "我对坚果过敏，有哪些零食不含坚果？",
+      "expected_tool": "search_products",
+      "expected_tool_args": {"query": "无坚果过敏"},
+      "evaluation": {
+        "intent_match": "search",
+        "language": "zh",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "a09",
+      "name": "价格敏感查询",
+      "user_message": "推荐一些20元以下的零食",
+      "expected_tool": "search_products",
+      "evaluation": {
+        "intent_match": "search",
+        "language": "zh",
+        "difficulty": "hard",
+        "notes": "agent should filter results by price after search"
+      }
+    },
+    {
+      "id": "a10",
+      "name": "英文购物车操作",
+      "user_message": "Show me what's in my cart and remove anything with seafood",
+      "expected_tool": "get_cart",
+      "evaluation": {
+        "intent_match": "cart_view",
+        "language": "en",
+        "difficulty": "hard",
+        "follow_up": {
+          "user_message": "get rid of the squid",
+          "expected_tool": "remove_from_cart"
+        }
+      }
+    },
+    {
+      "id": "a11",
+      "name": "推荐送礼零食",
+      "user_message": "快过年了，想给朋友买点零食礼盒，有什么推荐？",
+      "expected_tool": "search_products",
+      "expected_tool_args": {"query": "送礼 礼盒"},
+      "evaluation": {
+        "intent_match": "search",
+        "language": "zh",
+        "difficulty": "medium"
+      }
+    },
+    {
+      "id": "a12",
+      "name": "混合中英文查询",
+      "user_message": "帮我找一些low calorie的零食和herbal tea",
+      "expected_tool": "search_products",
+      "expected_tool_args": {"query": "low calorie herbal tea"},
+      "evaluation": {
+        "intent_match": "search",
+        "language": "mixed",
+        "difficulty": "hard"
+      }
+    }
+  ],
+  "metrics": {
+    "tool_selection_accuracy": true,
+    "language_detection": true,
+    "response_relevance": true,
+    "conversation_quality": true
+  }
+}
