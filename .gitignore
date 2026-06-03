@@ -1,0 +1,47 @@
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Go
+/bin/
+/vendor/
+*.exe
+*.test
+*.out
+
+# Flutter / Dart
+.dart_tool/
+.packages
+build/
+*.iml
+.idea/
+.vscode/
+
+# IDE
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose.override.yml
+
+# Secrets & keys
+*.pem
+*.key
+*.p12
+service-account.json
+
+# Langfuse
+.langfuse/
+
+# MinIO
+data/
+
+# Logs
+*.log
+logs/
