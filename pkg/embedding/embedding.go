@@ -24,15 +24,15 @@ func New(baseURL, model string) *Client {
 
 type EmbedRequest struct {
 	Model  string `json:"model"`
-	Input  string `json:"input"`
+	Prompt string `json:"prompt"`
 }
 
 type EmbedResponse struct {
-	Embeddings [][]float64 `json:"embeddings"`
+	Embedding []float64 `json:"embedding"`
 }
 
 func (c *Client) Embed(text string) ([]float64, error) {
-	reqBody := EmbedRequest{Model: c.model, Input: text}
+	reqBody := EmbedRequest{Model: c.model, Prompt: text}
 	body, _ := json.Marshal(reqBody)
 
 	resp, err := c.httpCli.Post(c.baseURL+"/api/embeddings", "application/json", bytes.NewReader(body))
@@ -45,28 +45,20 @@ func (c *Client) Embed(text string) ([]float64, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("embedding.decode_error: %w", err)
 	}
-	if len(result.Embeddings) == 0 {
+	if len(result.Embedding) == 0 {
 		return nil, fmt.Errorf("embedding.empty_result")
 	}
-	return result.Embeddings[0], nil
+	return result.Embedding, nil
 }
 
 func (c *Client) EmbedBatch(texts []string) ([][]float64, error) {
-	reqBody := EmbedRequest{Model: c.model, Input: texts[0]} // Ollama handles batched input as single string
-	if len(texts) > 1 {
-		// One by one for Ollama
+	result := make([][]float64, len(texts))
+	for i, text := range texts {
+		vec, err := c.Embed(text)
+		if err != nil {
+			return nil, err
+		}
+		result[i] = vec
 	}
-	body, _ := json.Marshal(reqBody)
-
-	resp, err := c.httpCli.Post(c.baseURL+"/api/embeddings", "application/json", bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("embedding.error: %w", err)
-	}
-	defer resp.Body.Close()
-
-	var result EmbedResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("embedding.decode_error: %w", err)
-	}
-	return result.Embeddings, nil
+	return result, nil
 }

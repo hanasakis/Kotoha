@@ -1,13 +1,12 @@
 package auth_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/hanasakis/kotoha/internal/auth"
 	"github.com/hanasakis/kotoha/internal/testutil"
 	"github.com/hanasakis/kotoha/pkg/db"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestRegisterAndLogin(t *testing.T) {
@@ -27,15 +26,33 @@ func TestRegisterAndLogin(t *testing.T) {
 			Password: "password123",
 			Nickname: "tester",
 		}, "ios", "127.0.0.1")
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		assert.NotEmpty(t, result.AccessToken)
-		assert.NotEmpty(t, result.RefreshToken)
-		assert.Equal(t, "test@example.com", result.User.Email)
-		assert.Equal(t, "tester", result.User.Nickname)
-		assert.Equal(t, "user", result.User.Role)
-		assert.NotEmpty(t, result.User.PasswordHash)
-		assert.NotEqual(t, "password123", result.User.PasswordHash)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result == nil {
+			t.Fatal("expected non-nil result")
+		}
+		if result.AccessToken == "" {
+			t.Error("expected non-empty AccessToken")
+		}
+		if result.RefreshToken == "" {
+			t.Error("expected non-empty RefreshToken")
+		}
+		if result.User.Email != "test@example.com" {
+			t.Errorf("got email %q, want test@example.com", result.User.Email)
+		}
+		if result.User.Nickname != "tester" {
+			t.Errorf("got nickname %q, want tester", result.User.Nickname)
+		}
+		if result.User.Role != "user" {
+			t.Errorf("got role %q, want user", result.User.Role)
+		}
+		if result.User.PasswordHash == "" {
+			t.Error("expected non-empty PasswordHash")
+		}
+		if result.User.PasswordHash == "password123" {
+			t.Error("password should be hashed, not plaintext")
+		}
 	})
 
 	t.Run("register_duplicate_email", func(t *testing.T) {
@@ -43,8 +60,12 @@ func TestRegisterAndLogin(t *testing.T) {
 			Email:    "test@example.com",
 			Password: "password456",
 		}, "ios", "127.0.0.1")
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "email_exists")
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if !strings.Contains(err.Error(), "email_exists") {
+			t.Errorf("expected 'email_exists' error, got %q", err.Error())
+		}
 	})
 
 	t.Run("login_correct_password", func(t *testing.T) {
@@ -52,9 +73,15 @@ func TestRegisterAndLogin(t *testing.T) {
 			Email:    "test@example.com",
 			Password: "password123",
 		}, "android", "10.0.0.1")
-		require.NoError(t, err)
-		assert.NotEmpty(t, result.AccessToken)
-		assert.NotEmpty(t, result.RefreshToken)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result.AccessToken == "" {
+			t.Error("expected non-empty AccessToken")
+		}
+		if result.RefreshToken == "" {
+			t.Error("expected non-empty RefreshToken")
+		}
 	})
 
 	t.Run("login_wrong_password", func(t *testing.T) {
@@ -62,8 +89,12 @@ func TestRegisterAndLogin(t *testing.T) {
 			Email:    "test@example.com",
 			Password: "wrongpassword",
 		}, "web", "10.0.0.1")
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "login_failed")
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if !strings.Contains(err.Error(), "login_failed") {
+			t.Errorf("expected 'login_failed' error, got %q", err.Error())
+		}
 	})
 
 	t.Run("login_nonexistent_user", func(t *testing.T) {
@@ -71,8 +102,12 @@ func TestRegisterAndLogin(t *testing.T) {
 			Email:    "nobody@example.com",
 			Password: "anything",
 		}, "web", "10.0.0.1")
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "login_failed")
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if !strings.Contains(err.Error(), "login_failed") {
+			t.Errorf("expected 'login_failed' error, got %q", err.Error())
+		}
 	})
 }
 
@@ -91,26 +126,41 @@ func TestRefreshAndLogout(t *testing.T) {
 		Email:    "refresh@test.com",
 		Password: "pass12345",
 	}, "ios", "127.0.0.1")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	t.Run("refresh_valid_token", func(t *testing.T) {
 		newResult, err := svc.Refresh(result.RefreshToken, "ios", "127.0.0.1")
-		require.NoError(t, err)
-		assert.NotEmpty(t, newResult.AccessToken)
-		assert.NotEqual(t, result.RefreshToken, newResult.RefreshToken)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if newResult.AccessToken == "" {
+			t.Error("expected non-empty AccessToken")
+		}
+		if newResult.RefreshToken == result.RefreshToken {
+			t.Error("expected new refresh token, got same one")
+		}
 	})
 
 	t.Run("refresh_invalidated_token", func(t *testing.T) {
 		_, err := svc.Refresh(result.RefreshToken, "ios", "127.0.0.1")
-		assert.Error(t, err)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
 	})
 
 	t.Run("logout", func(t *testing.T) {
-		loginRes, _ := svc.Login(auth.LoginInput{
+		loginRes, err := svc.Login(auth.LoginInput{
 			Email:    "refresh@test.com",
 			Password: "pass12345",
 		}, "test", "127.0.0.1")
-		err := svc.Logout(loginRes.RefreshToken)
-		assert.NoError(t, err)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		err = svc.Logout(loginRes.RefreshToken)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
 	})
 }

@@ -35,11 +35,18 @@ func (r *Repository) CreateCategory(cat *Category) error {
 
 // --- Products ---
 
-func (r *Repository) ListProducts(page, pageSize int) ([]Product, int64, error) {
+func (r *Repository) ListProducts(page, pageSize int, keyword string, categoryID uint) ([]Product, int64, error) {
 	var products []Product
 	var total int64
 
 	query := r.DB.Model(&Product{}).Where("is_active = ?", true)
+	if keyword != "" {
+		like := "%" + keyword + "%"
+		query = query.Where("name ILIKE ? OR name_en ILIKE ? OR tags ILIKE ? OR description ILIKE ?", like, like, like, like)
+	}
+	if categoryID > 0 {
+		query = query.Where("category_id = ?", categoryID)
+	}
 	query.Count(&total)
 
 	err := query.Preload("SKUs").Offset((page - 1) * pageSize).Limit(pageSize).
@@ -66,6 +73,17 @@ func (r *Repository) UpdateProduct(p *Product) error {
 
 func (r *Repository) DeleteProduct(id uint) error {
 	return r.DB.Delete(&Product{}, id).Error
+}
+
+func (r *Repository) UpdateProductImages(mapping map[string]string) error {
+	return r.DB.Transaction(func(tx *gorm.DB) error {
+		for name, url := range mapping {
+			if err := tx.Model(&Product{}).Where("name = ?", name).Update("image_url", url).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (r *Repository) GetProductsByIDs(ids []uint) ([]Product, error) {

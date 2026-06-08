@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"time"
 
 	goredis "github.com/hanasakis/kotoha/pkg/redis"
 )
+
+const cartTTL = 7 * 24 * time.Hour
 
 type Repository struct {
 	rdb *goredis.Client
@@ -37,11 +40,19 @@ func (r *Repository) GetItems(ctx context.Context, userID uint) (map[uint]int, e
 }
 
 func (r *Repository) SetItem(ctx context.Context, userID, skuID uint, qty int) error {
-	return r.rdb.RDB.HSet(ctx, r.cartKey(userID), strconv.FormatUint(uint64(skuID), 10), qty).Err()
+	key := r.cartKey(userID)
+	if err := r.rdb.RDB.HSet(ctx, key, strconv.FormatUint(uint64(skuID), 10), qty).Err(); err != nil {
+		return err
+	}
+	return r.rdb.RDB.Expire(ctx, key, cartTTL).Err()
 }
 
 func (r *Repository) RemoveItem(ctx context.Context, userID, skuID uint) error {
-	return r.rdb.RDB.HDel(ctx, r.cartKey(userID), strconv.FormatUint(uint64(skuID), 10)).Err()
+	key := r.cartKey(userID)
+	if err := r.rdb.RDB.HDel(ctx, key, strconv.FormatUint(uint64(skuID), 10)).Err(); err != nil {
+		return err
+	}
+	return r.rdb.RDB.Expire(ctx, key, cartTTL).Err()
 }
 
 func (r *Repository) Clear(ctx context.Context, userID uint) error {

@@ -23,6 +23,21 @@ func (r *Repository) FindByEmail(email string) (*User, error) {
 	return &user, nil
 }
 
+// FindByEmailUnscoped returns a user by email including soft-deleted records.
+func (r *Repository) FindByEmailUnscoped(email string) (*User, error) {
+	var user User
+	err := r.DB.Unscoped().Where("email = ?", email).First(&user).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+// HardDeleteUser permanently removes a user record (bypasses soft delete).
+func (r *Repository) HardDeleteUser(userID uint) error {
+	return r.DB.Unscoped().Delete(&User{}, userID).Error
+}
+
 func (r *Repository) FindByID(id uint) (*User, error) {
 	var user User
 	err := r.DB.First(&user, id).Error
@@ -59,4 +74,21 @@ func (r *Repository) InvalidateUserSessions(userID uint) error {
 
 func (r *Repository) CleanExpiredSessions() error {
 	return r.DB.Where("expires_at < ?", time.Now()).Delete(&Session{}).Error
+}
+
+func (r *Repository) CreatePasswordResetToken(token *PasswordResetToken) error {
+	return r.DB.Create(token).Error
+}
+
+func (r *Repository) FindPasswordResetToken(tokenHash string) (*PasswordResetToken, error) {
+	var t PasswordResetToken
+	err := r.DB.Where("token_hash = ? AND used = ? AND expires_at > ?", tokenHash, false, time.Now()).First(&t).Error
+	if err != nil {
+		return nil, err
+	}
+	return &t, nil
+}
+
+func (r *Repository) MarkResetTokenUsed(tokenID uint) error {
+	return r.DB.Model(&PasswordResetToken{}).Where("id = ?", tokenID).Update("used", true).Error
 }

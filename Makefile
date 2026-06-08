@@ -1,4 +1,4 @@
-.PHONY: run build test lint
+.PHONY: run build test lint eval
 
 run:
 	go run ./cmd/server
@@ -8,3 +8,6 @@ build:
 
 test:
 	go test ./... -v
+
+eval:
+	go test -v -run "Eval" ./internal/search/ ./internal/agent/

@@ -2,9 +2,9 @@ package redis
 
 import (
 	"context"
-	"log"
 	"time"
 
+	klog "github.com/hanasakis/kotoha/pkg/log"
 	goredis "github.com/redis/go-redis/v9"
 )
 
@@ -29,7 +29,7 @@ func New(addr, password string, db int) (*Client, error) {
 		return nil, err
 	}
 
-	log.Println("[Redis] connected")
+	klog.Info("Redis connected", nil)
 	return &Client{RDB: rdb}, nil
 }
 

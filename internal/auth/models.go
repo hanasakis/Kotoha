@@ -21,9 +21,18 @@ type Session struct {
 	ID           uint      `gorm:"primaryKey" json:"id"`
 	UserID       uint      `gorm:"index;not null" json:"user_id"`
 	RefreshToken string    `gorm:"size:512;not null" json:"-"`
-	DeviceType   string    `gorm:"size:50" json:"device_type"`
+	DeviceType   string    `gorm:"size:512" json:"device_type"`
 	DeviceIP     string    `gorm:"size:50" json:"device_ip"`
 	IsValid      bool      `gorm:"default:true" json:"is_valid"`
 	ExpiresAt    time.Time `json:"expires_at"`
 	CreatedAt    time.Time `json:"created_at"`
+}
+
+type PasswordResetToken struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	TokenHash string    `gorm:"uniqueIndex;size:64;not null" json:"-"`
+	UserID    uint      `gorm:"index;not null" json:"user_id"`
+	ExpiresAt time.Time `json:"expires_at"`
+	Used      bool      `gorm:"default:false" json:"used"`
+	CreatedAt time.Time `json:"created_at"`
 }

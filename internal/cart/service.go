@@ -77,7 +77,10 @@ func (s *Service) AddItem(ctx context.Context, userID, skuID uint, qty int) erro
 	if sku.Stock < qty {
 		return fmt.Errorf("cart.insufficient_stock")
 	}
-	raw, _ := s.repo.GetItems(ctx, userID)
+	raw, err := s.repo.GetItems(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("cart.error: %w", err)
+	}
 	newQty := raw[skuID] + qty
 	if newQty > sku.Stock {
 		return fmt.Errorf("cart.insufficient_stock")

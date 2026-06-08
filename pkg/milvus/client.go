@@ -2,22 +2,30 @@ package milvus
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 )
 
 type Client struct {
 	baseURL string
 	dbName  string
+	authHdr string
 	httpCli *http.Client
 }
 
-func New(addr, dbName string) *Client {
+func New(addr, dbName, user, password string) *Client {
+	authHdr := ""
+	if user != "" {
+		authHdr = "Bearer " + base64.StdEncoding.EncodeToString([]byte(user+":"+password))
+	}
 	return &Client{
 		baseURL: "http://" + addr + "/v2/vectordb",
 		dbName:  dbName,
+		authHdr: authHdr,
 		httpCli: &http.Client{Timeout: 60 * time.Second},
 	}
 }
@@ -33,12 +41,30 @@ type collectionSchema struct {
 }
 
 type createReq struct {
-	CollectionName string        `json:"collectionName"`
-	DBName         string        `json:"dbName"`
-	Dimension      int           `json:"dimension"`
-	MetricType     string        `json:"metricType"`
-	PrimaryField   string        `json:"primaryField"`
-	VectorField    string        `json:"vectorField"`
+	CollectionName string `json:"collectionName"`
+	DBName         string `json:"dbName"`
+	Dimension      int    `json:"dimension"`
+	MetricType     string `json:"metricType"`
+	PrimaryField   string `json:"primaryField"`
+	VectorField    string `json:"vectorField"`
+	EnableDynamic  bool   `json:"enableDynamic"`
+}
+
+func (c *Client) doPost(path string, body []byte) (*http.Response, error) {
+	req, _ := http.NewRequest("POST", c.baseURL+path, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	if c.authHdr != "" {
+		req.Header.Set("Authorization", c.authHdr)
+	}
+	return c.httpCli.Do(req)
+}
+
+func (c *Client) doGet(path string) (*http.Response, error) {
+	req, _ := http.NewRequest("GET", c.baseURL+path, nil)
+	if c.authHdr != "" {
+		req.Header.Set("Authorization", c.authHdr)
+	}
+	return c.httpCli.Do(req)
 }
 
 func (c *Client) CreateCollection(name string, dim int) error {
@@ -49,10 +75,11 @@ func (c *Client) CreateCollection(name string, dim int) error {
 		MetricType:     "IP",
 		PrimaryField:   "id",
 		VectorField:    "vector",
+		EnableDynamic:  true,
 	}
 	body, _ := json.Marshal(req)
 
-	resp, err := c.httpCli.Post(c.baseURL+"/collections/create", "application/json", bytes.NewReader(body))
+	resp, err := c.doPost("/collections/create", body)
 	if err != nil {
 		return fmt.Errorf("milvus.create_error: %w", err)
 	}
@@ -70,7 +97,7 @@ func (c *Client) CreateCollection(name string, dim int) error {
 }
 
 func (c *Client) HasCollection(name string) (bool, error) {
-	resp, err := c.httpCli.Get(c.baseURL + "/collections/describe?collectionName=" + name + "&dbName=" + c.dbName)
+	resp, err := c.doGet("/collections/describe?collectionName=" + name + "&dbName=" + c.dbName)
 	if err != nil {
 		return false, nil
 	}
@@ -92,7 +119,7 @@ func (c *Client) Insert(collectionName string, rows []map[string]interface{}) er
 	}
 	body, _ := json.Marshal(req)
 
-	resp, err := c.httpCli.Post(c.baseURL+"/entities/insert", "application/json", bytes.NewReader(body))
+	resp, err := c.doPost("/entities/insert", body)
 	if err != nil {
 		return fmt.Errorf("milvus.insert_error: %w", err)
 	}
@@ -104,10 +131,67 @@ func (c *Client) Insert(collectionName string, rows []map[string]interface{}) er
 	return nil
 }
 
+type queryReq struct {
+	CollectionName string   `json:"collectionName"`
+	DBName         string   `json:"dbName"`
+	Filter         string   `json:"filter"`
+	Limit          int      `json:"limit"`
+	OutputFields   []string `json:"outputFields"`
+}
+
+func (c *Client) QueryByKeyword(collectionName string, keywords []string, limit int) ([]int64, error) {
+	escaped := make([]string, len(keywords))
+	for i, kw := range keywords {
+		kw = strings.ReplaceAll(kw, "'", "''")
+		kw = strings.ReplaceAll(kw, `"`, `\"`)
+		escaped[i] = kw
+	}
+	var conditions []string
+	for _, kw := range escaped {
+		conditions = append(conditions, fmt.Sprintf(`text like "%%%s%%"`, kw))
+	}
+	filter := strings.Join(conditions, " or ")
+
+	req := queryReq{
+		CollectionName: collectionName,
+		DBName:         c.dbName,
+		Filter:         filter,
+		Limit:          limit,
+		OutputFields:   []string{"id"},
+	}
+	body, _ := json.Marshal(req)
+
+	resp, err := c.doPost("/entities/query", body)
+	if err != nil {
+		return nil, fmt.Errorf("milvus.query_error: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("milvus.query_error: status %d", resp.StatusCode)
+	}
+
+	var rawResp struct {
+		Data []struct {
+			ID int64 `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&rawResp); err != nil {
+		return nil, fmt.Errorf("milvus.decode_error: %w", err)
+	}
+
+	ids := make([]int64, len(rawResp.Data))
+	for i, d := range rawResp.Data {
+		ids[i] = d.ID
+	}
+	return ids, nil
+}
+
 type searchReq struct {
 	CollectionName string        `json:"collectionName"`
 	DBName         string        `json:"dbName"`
-	Vector         []float64     `json:"vector"`
+	Data           [][]float64   `json:"data"`
+	AnnsField      string        `json:"annsField"`
 	Limit          int           `json:"limit"`
 	OutputFields   []string      `json:"outputFields"`
 }
@@ -124,13 +208,14 @@ func (c *Client) Search(collectionName string, vector []float64, limit int, outp
 	req := searchReq{
 		CollectionName: collectionName,
 		DBName:         c.dbName,
-		Vector:         vector,
+		Data:           [][]float64{vector},
+		AnnsField:      "vector",
 		Limit:          limit,
 		OutputFields:   outputFields,
 	}
 	body, _ := json.Marshal(req)
 
-	resp, err := c.httpCli.Post(c.baseURL+"/entities/search", "application/json", bytes.NewReader(body))
+	resp, err := c.doPost("/entities/search", body)
 	if err != nil {
 		return nil, fmt.Errorf("milvus.search_error: %w", err)
 	}

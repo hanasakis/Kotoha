@@ -2,6 +2,7 @@ package order_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/hanasakis/kotoha/internal/cart"
@@ -9,8 +10,6 @@ import (
 	"github.com/hanasakis/kotoha/internal/order"
 	"github.com/hanasakis/kotoha/internal/testutil"
 	"github.com/hanasakis/kotoha/pkg/db"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestCreateOrder(t *testing.T) {
@@ -22,12 +21,18 @@ func TestCreateOrder(t *testing.T) {
 	}
 
 	catalogRepo := catalog.NewRepository(database)
-	catalogSvc := catalog.NewService(catalogRepo)
-	require.NoError(t, catalogSvc.SeedData())
+	catalogSvc := catalog.NewService(catalogRepo, "http://localhost:9000/kotoha-images/products/")
+	if err := catalogSvc.SeedData(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	products, _, err := catalogRepo.ListProducts(1, 10)
-	require.NoError(t, err)
-	require.NotEmpty(t, products)
+	products, _, err := catalogRepo.ListProducts(1, 10, "", 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(products) == 0 {
+		t.Fatal("expected at least one product")
+	}
 
 	redisClient := testutil.SetupTestRedis(t)
 	defer redisClient.Close()
@@ -39,34 +44,60 @@ func TestCreateOrder(t *testing.T) {
 	firstProduct := products[0]
 	firstSKU := firstProduct.SKUs[0]
 	err = cartSvc.AddItem(ctx, 1, firstSKU.ID, 2)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	t.Run("create_from_cart", func(t *testing.T) {
 		orderRepo := order.NewRepository(database)
-		orderSvc := order.NewService(orderRepo, cartRepo, catalogRepo)
+		orderSvc := order.NewService(orderRepo, cartRepo, catalogRepo, nil)
 
 		created, err := orderSvc.CreateOrder(ctx, 1, order.CreateOrderInput{AddressID: 1})
-		require.NoError(t, err)
-		assert.NotEmpty(t, created.OrderNo)
-		assert.Len(t, created.OrderNo, 21) // KO + userID(1) + timestamp(14) + 4 random
-		assert.Equal(t, order.StatusPending, created.Status)
-		assert.Equal(t, "cny", created.Currency)
-		assert.Len(t, created.Items, 1)
-		assert.Equal(t, firstSKU.ID, created.Items[0].SKUID)
-		assert.Equal(t, 2, created.Items[0].Quantity)
-		assert.Equal(t, firstSKU.Price*2, created.TotalAmount)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if created.OrderNo == "" {
+			t.Error("expected non-empty OrderNo")
+		}
+		if len(created.OrderNo) != 21 {
+			t.Errorf("got OrderNo length %d, want 21", len(created.OrderNo))
+		}
+		if created.Status != order.StatusPending {
+			t.Errorf("got status %q, want %q", created.Status, order.StatusPending)
+		}
+		if created.Currency != "cny" {
+			t.Errorf("got currency %q, want cny", created.Currency)
+		}
+		if len(created.Items) != 1 {
+			t.Errorf("got %d items, want 1", len(created.Items))
+		}
+		if created.Items[0].SKUID != firstSKU.ID {
+			t.Errorf("got SKUID %d, want %d", created.Items[0].SKUID, firstSKU.ID)
+		}
+		if created.Items[0].Quantity != 2 {
+			t.Errorf("got quantity %d, want 2", created.Items[0].Quantity)
+		}
+		if created.TotalAmount != firstSKU.Price*2 {
+			t.Errorf("got TotalAmount %d, want %d", created.TotalAmount, firstSKU.Price*2)
+		}
 
 		items, _ := cartSvc.GetCart(ctx, 1)
-		assert.Empty(t, items)
+		if len(items) != 0 {
+			t.Errorf("expected empty cart after order, got %d items", len(items))
+		}
 	})
 
 	t.Run("empty_cart_should_fail", func(t *testing.T) {
 		orderRepo := order.NewRepository(database)
-		orderSvc := order.NewService(orderRepo, cartRepo, catalogRepo)
+		orderSvc := order.NewService(orderRepo, cartRepo, catalogRepo, nil)
 
 		_, err := orderSvc.CreateOrder(ctx, 2, order.CreateOrderInput{AddressID: 1})
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "cart_empty")
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if !strings.Contains(err.Error(), "cart_empty") {
+			t.Errorf("expected 'cart_empty' error, got %q", err.Error())
+		}
 	})
 }
 
@@ -82,9 +113,15 @@ func TestListOrders(t *testing.T) {
 
 	t.Run("list_empty", func(t *testing.T) {
 		orders, total, err := orderRepo.ListByUser(1, 1, 10)
-		require.NoError(t, err)
-		assert.Equal(t, int64(0), total)
-		assert.Empty(t, orders)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if total != 0 {
+			t.Errorf("got total %d, want 0", total)
+		}
+		if len(orders) != 0 {
+			t.Errorf("expected empty orders, got %d", len(orders))
+		}
 	})
 }
 
@@ -97,11 +134,15 @@ func TestCancelOrder(t *testing.T) {
 	}
 
 	catalogRepo := catalog.NewRepository(database)
-	catalogSvc := catalog.NewService(catalogRepo)
-	require.NoError(t, catalogSvc.SeedData())
+	catalogSvc := catalog.NewService(catalogRepo, "http://localhost:9000/kotoha-images/products/")
+	if err := catalogSvc.SeedData(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	products, _, _ := catalogRepo.ListProducts(1, 1)
-	require.NotEmpty(t, products)
+	products, _, _ := catalogRepo.ListProducts(1, 1, "", 0)
+	if len(products) == 0 {
+		t.Fatal("expected at least one product")
+	}
 	sku := products[0].SKUs[0]
 	initialStock := sku.Stock
 
@@ -110,7 +151,7 @@ func TestCancelOrder(t *testing.T) {
 
 	cartRepo := cart.NewRepository(redisClient)
 	orderRepo := order.NewRepository(database)
-	orderSvc := order.NewService(orderRepo, cartRepo, catalogRepo)
+	orderSvc := order.NewService(orderRepo, cartRepo, catalogRepo, nil)
 
 	testOrder := &order.Order{
 		UserID:      1,
@@ -120,23 +161,35 @@ func TestCancelOrder(t *testing.T) {
 		Currency:    "cny",
 		Items:       []order.OrderItem{{ProductID: sku.ProductID, SKUID: sku.ID, Name: "test", Price: sku.Price, Quantity: 1}},
 	}
-	require.NoError(t, orderRepo.Create(testOrder))
+	if err := orderRepo.Create(testOrder); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	catalogRepo.DecrStock(sku.ID, 1)
 
 	t.Run("cancel_pending", func(t *testing.T) {
 		err := orderSvc.CancelOrder(testOrder.ID, 1)
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 
 		updated, err := orderRepo.GetByID(testOrder.ID, 1)
-		require.NoError(t, err)
-		assert.Equal(t, order.StatusCancelled, updated.Status)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if updated.Status != order.StatusCancelled {
+			t.Errorf("got status %q, want %q", updated.Status, order.StatusCancelled)
+		}
 
 		restoredSKU, _ := catalogRepo.GetSKU(sku.ID)
-		assert.Equal(t, initialStock, restoredSKU.Stock)
+		if restoredSKU.Stock != initialStock {
+			t.Errorf("got restored stock %d, want %d", restoredSKU.Stock, initialStock)
+		}
 	})
 
 	t.Run("cancel_nonexistent", func(t *testing.T) {
 		err := orderSvc.CancelOrder(99999, 1)
-		assert.Error(t, err)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
 	})
 }

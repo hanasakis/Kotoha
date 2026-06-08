@@ -7,11 +7,15 @@ import (
 )
 
 const (
-	StatusPending   = "pending_payment"
-	StatusPaid      = "paid"
-	StatusShipped   = "shipped"
-	StatusDelivered = "delivered"
-	StatusCancelled = "cancelled"
+	StatusPending          = "pending_payment"
+	StatusPaid             = "paid"
+	StatusShipped          = "shipped"
+	StatusDelivered        = "delivered"
+	StatusCancelled        = "cancelled"
+	StatusRefunded         = "refunded"
+	StatusPartialRefunded  = "partially_refunded"
+	StatusExpired          = "expired"
+	StatusPaymentFailed    = "payment_failed"
 )
 
 type Order struct {
@@ -21,7 +25,7 @@ type Order struct {
 	Status      string         `gorm:"size:30;default:pending_payment" json:"status"`
 	TotalAmount int            `gorm:"not null" json:"total_amount"`
 	Currency    string         `gorm:"size:10;default:cny" json:"currency"`
-	StripeSID   string         `gorm:"size:100" json:"stripe_session_id"`
+	StripeSID   string         `gorm:"column:stripe_session_id;size:512" json:"stripe_session_id"`
 	PaidAt      *time.Time     `json:"paid_at"`
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
@@ -49,5 +53,8 @@ type Payment struct {
 	Status         string     `gorm:"size:30" json:"status"`
 	IdempotencyKey string     `gorm:"size:100" json:"idempotency_key"`
 	PaidAt         *time.Time `json:"paid_at"`
+	RefundStripeID string     `gorm:"size:100" json:"refund_stripe_id"`
+	RefundAmount   int        `gorm:"default:0" json:"refund_amount"`
+	RefundedAt     *time.Time `json:"refunded_at"`
 	CreatedAt      time.Time  `json:"created_at"`
 }

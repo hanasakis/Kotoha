@@ -5,20 +5,29 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	resp "github.com/hanasakis/kotoha/pkg/response"
 )
 
 type Handler struct {
-	svc *Service
+	svc         *Service
+	trackSearch func(float64)
 }
 
-func NewHandler(svc *Service) *Handler {
-	return &Handler{svc: svc}
+func NewHandler(svc *Service, trackSearch func(float64)) *Handler {
+	return &Handler{svc: svc, trackSearch: trackSearch}
 }
 
+// @Summary      Search products (hybrid: dense + BM25)
+// @Tags         catalog
+// @Produce      json
+// @Param        q     query string true  "Search query"
+// @Param        limit query int    false "Max results" default(10)
+// @Success      200 {object} map[string]interface{}
+// @Router       /catalog/search [get]
 func (h *Handler) Search(c *gin.Context) {
 	query := c.Query("q")
 	if query == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "common.invalid_request"})
+		resp.BadRequest(c, "common.invalid_request")
 		return
 	}
 
@@ -29,17 +38,27 @@ func (h *Handler) Search(c *gin.Context) {
 
 	results, err := h.svc.Search(query, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "search.error"})
+		resp.Error(c, http.StatusInternalServerError, "search.error")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"query": query, "results": results})
+	if h.trackSearch != nil {
+		h.trackSearch(0)
+	}
+
+	resp.Success(c, gin.H{"query": query, "results": results})
 }
 
+// @Summary      Re-index all products into Milvus (admin)
+// @Tags         admin
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200 {object} map[string]interface{}
+// @Router       /admin/search/index [post]
 func (h *Handler) IndexAll(c *gin.Context) {
 	if err := h.svc.IndexAll(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": err.Error()})
+		resp.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	resp.Success(c, gin.H{"message": "ok"})
 }

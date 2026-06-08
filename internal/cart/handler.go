@@ -1,101 +1,121 @@
 package cart
 
 import (
-	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/hanasakis/kotoha/internal/middleware"
+	resp "github.com/hanasakis/kotoha/pkg/response"
 )
 
 type Handler struct {
-	svc *Service
+	svc          *Service
+	trackCartAdd func()
 }
 
-func NewHandler(svc *Service) *Handler {
-	return &Handler{svc: svc}
+func NewHandler(svc *Service, trackCartAdd func()) *Handler {
+	return &Handler{svc: svc, trackCartAdd: trackCartAdd}
 }
 
-func userIDFromContext(c *gin.Context) uint {
-	v, exists := c.Get("user_id")
-	if !exists {
-		return 0
-	}
-	switch id := v.(type) {
-	case float64:
-		return uint(id)
-	case uint:
-		return id
-	case string:
-		n, _ := strconv.ParseUint(id, 10, 64)
-		return uint(n)
-	default:
-		return 0
-	}
-}
-
+// @Summary      Get current user's cart
+// @Tags         cart
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200 {object} map[string]interface{}
+// @Router       /cart [get]
 func (h *Handler) GetCart(c *gin.Context) {
-	userID := userIDFromContext(c)
+	userID := middleware.UserIDFromContext(c)
 	items, err := h.svc.GetCart(c.Request.Context(), userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "common.server_error"})
+		resp.InternalError(c)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"items": items})
+	resp.Success(c, gin.H{"items": items})
 }
 
+// @Summary      Add item to cart
+// @Tags         cart
+// @Accept       json
+// @Produce      json
+// @Param        body body AddItemReq true "SKU ID and quantity"
+// @Security     BearerAuth
+// @Success      200 {object} map[string]interface{}
+// @Failure      400 {object} map[string]interface{}
+// @Router       /cart/items [post]
 func (h *Handler) AddItem(c *gin.Context) {
-	userID := userIDFromContext(c)
+	userID := middleware.UserIDFromContext(c)
 	var req AddItemReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "common.invalid_request"})
+		resp.BadRequest(c, "common.invalid_request")
 		return
 	}
 
 	if err := h.svc.AddItem(c.Request.Context(), userID, req.SKUID, req.Quantity); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error()})
+		resp.BadRequest(c, err.Error())
 		return
 	}
 
+	if h.trackCartAdd != nil {
+		h.trackCartAdd()
+	}
+
 	items, _ := h.svc.GetCart(c.Request.Context(), userID)
-	c.JSON(http.StatusOK, gin.H{"items": items})
+	resp.Success(c, gin.H{"items": items})
 }
 
+// @Summary      Update cart item quantity
+// @Tags         cart
+// @Accept       json
+// @Produce      json
+// @Param        skuID path int true "SKU ID"
+// @Param        body body UpdateQtyReq true "New quantity"
+// @Security     BearerAuth
+// @Success      200 {object} map[string]interface{}
+// @Failure      400 {object} map[string]interface{}
+// @Router       /cart/items/{skuID} [put]
 func (h *Handler) UpdateQty(c *gin.Context) {
-	userID := userIDFromContext(c)
+	userID := middleware.UserIDFromContext(c)
 	skuID, err := strconv.ParseUint(c.Param("skuID"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "common.invalid_request"})
+		resp.BadRequest(c, "common.invalid_request")
 		return
 	}
 
 	var req UpdateQtyReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "common.invalid_request"})
+		resp.BadRequest(c, "common.invalid_request")
 		return
 	}
 
 	if err := h.svc.UpdateQty(c.Request.Context(), userID, uint(skuID), req.Quantity); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error()})
+		resp.BadRequest(c, err.Error())
 		return
 	}
 
 	items, _ := h.svc.GetCart(c.Request.Context(), userID)
-	c.JSON(http.StatusOK, gin.H{"items": items})
+	resp.Success(c, gin.H{"items": items})
 }
 
+// @Summary      Remove item from cart
+// @Tags         cart
+// @Produce      json
+// @Param        skuID path int true "SKU ID"
+// @Security     BearerAuth
+// @Success      200 {object} map[string]interface{}
+// @Router       /cart/items/{skuID} [delete]
 func (h *Handler) RemoveItem(c *gin.Context) {
-	userID := userIDFromContext(c)
+	userID := middleware.UserIDFromContext(c)
 	skuID, err := strconv.ParseUint(c.Param("skuID"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "common.invalid_request"})
+		resp.BadRequest(c, "common.invalid_request")
 		return
 	}
 
 	if err := h.svc.RemoveItem(c.Request.Context(), userID, uint(skuID)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "common.server_error"})
+		resp.InternalError(c)
 		return
 	}
 
 	items, _ := h.svc.GetCart(c.Request.Context(), userID)
-	c.JSON(http.StatusOK, gin.H{"items": items})
+	resp.Success(c, gin.H{"items": items})
 }

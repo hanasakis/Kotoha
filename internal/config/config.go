@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,6 +23,7 @@ type Config struct {
 	Embedding EmbeddingConfig
 	I18n      I18nConfig
 	CORS      CORSConfig
+	SMTP      SMTPConfig
 }
 
 type ServerConfig struct {
@@ -71,6 +73,9 @@ type I18nConfig struct {
 }
 type CORSConfig struct {
 	Origins []string
+}
+type SMTPConfig struct {
+	Host, Port, User, Password, From, FromName string
 }
 
 func Load() (*Config, error) {
@@ -142,16 +147,45 @@ func Load() (*Config, error) {
 		CORS: CORSConfig{
 			Origins: strings.Split(getEnv("CORS_ORIGINS", "http://localhost:3000"), ","),
 		},
+		SMTP: SMTPConfig{
+			Host:     getEnv("SMTP_HOST", "smtp.resend.com"),
+			Port:     getEnv("SMTP_PORT", "587"),
+			User:     getEnv("SMTP_USER", "resend"),
+			Password: getEnv("SMTP_PASSWORD", ""),
+			From:     getEnv("SMTP_FROM", "onboarding@resend.dev"),
+			FromName: getEnv("SMTP_FROM_NAME", "Kotoha"),
+		},
 	}, nil
+}
+
+// Validate checks critical configuration values and returns an error if any are invalid.
+func (c *Config) Validate() error {
+	if c.JWT.Secret == "" {
+		return fmt.Errorf("JWT_SECRET must not be empty — generate one with: openssl rand -hex 32")
+	}
+	if c.Server.Port == "" {
+		return fmt.Errorf("SERVER_PORT must not be empty")
+	}
+	return nil
 }
 
 func (c *Config) DSN() string {
 	return "host=" + c.DB.Host + " user=" + c.DB.User + " password=" + c.DB.Password +
-		" dbname=" + c.DB.DBName + " port=" + c.DB.Port + " sslmode=" + c.DB.SSLMode
+		" dbname=" + c.DB.DBName + " port=" + c.DB.Port + " sslmode=" + c.DB.SSLMode +
+		" connect_timeout=10"
 }
 
 func (c *Config) RedisAddr() string  { return c.Redis.Host + ":" + c.Redis.Port }
 func (c *Config) MilvusAddr() string { return c.Milvus.Host + ":" + c.Milvus.Port }
+
+// S3PublicURL returns the public base URL for product images (e.g. "http://localhost:9000/kotoha-images/products/").
+func (c *Config) S3PublicURL() string {
+	scheme := "https"
+	if !c.S3.UseSSL {
+		scheme = "http"
+	}
+	return scheme + "://" + c.S3.Endpoint + "/" + c.S3.Bucket + "/products/"
+}
 
 func findEnvFile() string {
 	cwd, _ := os.Getwd()

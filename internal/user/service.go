@@ -33,8 +33,7 @@ func (s *Service) UpsertProfile(profile *Profile) error {
 	if err != nil {
 		return err
 	}
-	profile.ID = existing.ID
-	return s.DB.Save(profile).Error
+	return s.DB.Model(&existing).Omit("id", "user_id", "created_at").Updates(profile).Error
 }
 
 func (s *Service) GetAddresses(userID uint) ([]Address, error) {
@@ -82,6 +81,5 @@ func (s *Service) UpsertPreference(pref *Preference) error {
 	if err != nil {
 		return err
 	}
-	pref.ID = existing.ID
-	return s.DB.Save(pref).Error
+	return s.DB.Model(&existing).Omit("id", "user_id", "created_at").Updates(pref).Error
 }

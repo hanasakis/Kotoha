@@ -1,9 +1,9 @@
 package db
 
 import (
-	"log"
 	"time"
 
+	klog "github.com/hanasakis/kotoha/pkg/log"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -26,6 +26,6 @@ func NewPostgres(dsn string, maxOpen, maxIdle int) (*gorm.DB, error) {
 	sqlDB.SetMaxIdleConns(maxIdle)
 	sqlDB.SetConnMaxLifetime(5 * time.Minute)
 
-	log.Println("[DB] PostgreSQL connected")
+	klog.Info("PostgreSQL connected", nil)
 	return db, nil
 }

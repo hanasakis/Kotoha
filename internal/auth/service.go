@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -45,9 +46,15 @@ type AuthResult struct {
 }
 
 func (s *Service) Register(input RegisterInput, deviceType, deviceIP string) (*AuthResult, error) {
+	// Check including soft-deleted users — if a deleted account exists,
+	// permanently remove it so the email can be reused.
 	existing, err := s.repo.FindByEmail(input.Email)
 	if err == nil && existing != nil {
 		return nil, errors.New("auth.email_exists")
+	}
+	// Also check soft-deleted: if found, permanently delete to free the email
+	if deleted, err := s.repo.FindByEmailUnscoped(input.Email); err == nil && deleted != nil {
+		s.repo.HardDeleteUser(deleted.ID)
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
@@ -116,7 +123,7 @@ func (s *Service) generateAuthResult(user *User, deviceType, deviceIP string) (*
 	expiresAt := now.Add(s.accessTTL)
 
 	claims := jwt.MapClaims{
-		"sub":  user.ID,
+		"sub":  fmt.Sprintf("%d", user.ID),
 		"role": user.Role,
 		"iat":  now.Unix(),
 		"exp":  expiresAt.Unix(),
@@ -133,10 +140,14 @@ func (s *Service) generateAuthResult(user *User, deviceType, deviceIP string) (*
 	}
 	refreshToken := hex.EncodeToString(refreshBytes)
 
+	dt := deviceType
+	if len(dt) > 500 {
+		dt = dt[:500]
+	}
 	session := &Session{
 		UserID:       user.ID,
 		RefreshToken: refreshToken,
-		DeviceType:   deviceType,
+		DeviceType:   dt,
 		DeviceIP:     deviceIP,
 		IsValid:      true,
 		ExpiresAt:    now.Add(s.refreshTTL),
