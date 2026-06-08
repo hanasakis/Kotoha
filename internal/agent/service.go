@@ -224,8 +224,16 @@ func classifyIntent(msg string) (string, string, bool) {
 		return "add_to_cart", fmt.Sprintf(`{"sku_id":%d,"quantity":%d}`, skuID, qty), true
 	}
 
-	// Get cart
-	if matched, _ := regexp.MatchString(`购物车|cart|show.*(my )?(cart|shopping)`, msg); matched {
+	// Add to cart without SKU number — "加到购物车" pattern
+	if regexp.MustCompile(`加入购物车|加到购物车|放入购物车|添加.*购物车|添加至购物车`).MatchString(msg) {
+		return "add_to_cart", `{"sku_id":0,"quantity":1}`, true
+	}
+
+	// Get cart — only if NOT an add/remove action to cart
+	if regexp.MustCompile(`从购物车.*删除|从购物车.*移除|删除.*购物车|移除.*购物车`).MatchString(msg) {
+		return "remove_from_cart", "{}", true
+	}
+	if matched, _ := regexp.MatchString(`^(?i)(?:我的)?购物车$|^(?:我的)?购物车.*[？?]|^cart$|^show.*cart`, msg); matched {
 		return "get_cart", "{}", true
 	}
 
@@ -249,15 +257,15 @@ func classifyIntent(msg string) (string, string, bool) {
 		}
 	}
 
-	// Search: precise intent prefixes
-	searchRe := regexp.MustCompile(`^(?:搜索|帮我找|search|find|looking\s*for)\s*(.+)`)
+	// Search: precise intent prefixes + "I'm looking for" pattern
+	searchRe := regexp.MustCompile(`^(?i)(?:搜索|帮我找|search|find|looking\s*for|i'?m\s+looking\s+for)\s*(.+)`)
 	if m := searchRe.FindStringSubmatch(msg); len(m) > 1 && strings.TrimSpace(m[1]) != "" {
 		keyword := cleanKeyword(m[1])
 		return "search_products", fmt.Sprintf(`{"query":"%s"}`, keyword), true
 	}
 
 	// Recommendation: "帮我推荐/给我推荐/推荐一些 + keyword"
-	if re := regexp.MustCompile(`(?:帮我推荐|给我推荐|推荐一下|推荐一些|推荐几个|推荐)\s*(.+)`); re.MatchString(msg) {
+	if re := regexp.MustCompile(`(?:帮我推荐|给我推荐|推荐一下|推荐一些|推荐几个)\s*(.+)`); re.MatchString(msg) {
 		m := re.FindStringSubmatch(msg)
 		keyword := cleanKeyword(m[1])
 		for _, prefix := range []string{"一些", "几个", "一下", "好的", "好吃的", "好玩的"} {
@@ -266,6 +274,30 @@ func classifyIntent(msg string) (string, string, bool) {
 		}
 		if len([]rune(keyword)) > 1 {
 			return "search_products", fmt.Sprintf(`{"query":"%s"}`, keyword), true
+		}
+	}
+	// Bare "推荐" — extract context from the full message
+	if strings.Contains(msg, "推荐") && !strings.HasPrefix(msg, "你好") {
+		// Try to extract what the user wants recommended
+		re := regexp.MustCompile(`推荐\s*(.+)`)
+		if m := re.FindStringSubmatch(msg); len(m) > 1 && len([]rune(strings.TrimSpace(m[1]))) > 1 {
+			keyword := cleanKeyword(m[1])
+			if len([]rune(keyword)) > 1 {
+				return "search_products", fmt.Sprintf(`{"query":"%s"}`, keyword), true
+			}
+		}
+		// If "推荐" is at the end, extract keywords before it
+		re2 := regexp.MustCompile(`(.+?)(?:有?什么?|哪些?|一下|几个|一些)?推荐[。！？.?]?$`)
+		if m2 := re2.FindStringSubmatch(msg); len(m2) > 1 {
+			keyword := cleanKeyword(m2[1])
+			// Remove filler prefixes
+			for _, prefix := range []string{"想", "想要", "想买", "买点", "给", "快过年了", "过年"} {
+				keyword = strings.TrimPrefix(keyword, prefix)
+				keyword = strings.TrimSpace(keyword)
+			}
+			if len([]rune(keyword)) > 2 {
+				return "search_products", fmt.Sprintf(`{"query":"%s"}`, keyword), true
+			}
 		}
 	}
 
