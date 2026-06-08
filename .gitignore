@@ -45,3 +45,6 @@ data/
 # Logs
 *.log
 logs/
+kotoha
+server.exe
+createadmin.exe
